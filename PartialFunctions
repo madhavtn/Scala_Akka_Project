@@ -1,0 +1,61 @@
+package lectures2.part2afp
+
+object PartialFunctions extends App{
+
+  // Make a fn which does not accept other than said values
+  val afun1 = (x: Int) => x match{
+    case 1 =>42
+    case 2 =>52
+    case 3 =>60
+  }
+
+  val apartialfn: PartialFunction[Int, Int] = {
+    case 1 =>42
+    case 2 =>52
+    case 3 =>60
+  }
+  println(apartialfn(3))
+
+  //PF utilities
+  println(apartialfn.isDefinedAt(31))  //checks whether the PF is defined for that value
+
+  // PF can be lifetd to total fns returning options for non-defined values
+  val lifted = apartialfn.lift
+  println(lifted(5)) // will return None as 5 is not defined ( will not crash)
+
+  val pfChain = apartialfn.orElse[Int,Int]{   //adding an extra chain in addition to original PF
+    case 45 => 88
+  }
+  println(pfChain(2))
+
+  //HOF accepts PF as well
+  val aMappedlist = List(1,2,3).map{
+    case 1 =>42
+    case 2 =>52
+    case 3 =>60
+  }
+  println(aMappedlist)
+
+  // unlike normal fns PF can have only one parameter type
+
+  // Constructing a PF yourself( anonymous class)
+  val aManualFussyfn = new PartialFunction[Int, Int]{
+    override def apply(x: Int): Int = x match{
+      case 1 =>42
+      case 2 =>52
+      case 3 =>60
+    }
+    override def isDefinedAt(x: Int): Boolean =
+      x==1 || x==2 || x==3
+  }
+  // a chatbot
+  val chatbot: PartialFunction[String, String]={
+    case "hello" => "Hi my name is bond"
+    case "call my mom" => "Calling your mom"
+    case _ =>"I didn't get it"
+  }
+  scala.io.Source.stdin.getLines().foreach(line =>println("cahatbot says:"+chatbot(line)))
+  // or
+  scala.io.Source.stdin.getLines().map(chatbot).foreach(println)
+
+}
