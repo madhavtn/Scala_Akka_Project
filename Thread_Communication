@@ -1,0 +1,229 @@
+package lectures.part3concurrency
+
+import scala.collection.mutable
+import scala.util.Random
+
+object ThreadCommunication extends App{
+/*
+  producer-consumer problem
+  producer -> [x] -> consumer
+ */
+  class simpleContainer{
+  private var value: Int = 0
+  def isEmpty: Boolean = value==0
+  def get ={
+    val result = value
+    value = 0
+    result
+  }
+  def set(newvalue: Int)={
+    value =newvalue
+  }
+}
+  def naiveconsprod(): Unit ={
+    val container  = new simpleContainer
+    val consumer = new Thread(() =>{
+      println("Consumer waiting")
+      while(container.isEmpty){
+        println("consumer actively waiting")
+      }
+      println("Consumer got value "+ container.get)
+    })
+    val producer = new Thread(() =>{
+      println("producer computing")
+      Thread.sleep(500)
+      val value = 45
+      println("I have produced value: "+value)
+      container.set(value)
+    })
+    consumer.start()
+    producer.start()
+  }
+
+
+  // wait and notify
+  def smartprodcons: Unit ={
+    val container = new simpleContainer
+    val consumer = new Thread(() => {
+      println("[Consumer] waiting...")
+      container.synchronized{
+        container.wait()
+      }
+      println("[consumer] I have got value "+container.get)
+    })
+    val producer = new Thread(() =>{
+      println("[Producer] working")
+      Thread.sleep(2000)
+      val value = 42
+      container.synchronized{
+        println("I have produced value "+value)
+        container.set(value)
+        container.notify()
+
+      }
+    })
+    consumer.start()
+    producer.start()
+  }
+  /*
+  Level 2
+  Prod -> [x x x] -> Cons
+   */
+  def prodconslargebuffer(): Unit ={
+    val buffer: mutable.Queue[Int] = new mutable.Queue[Int]
+    val capacity = 3
+    val consumer = new Thread(() =>{
+      val random = new Random()
+
+      while(true){
+        buffer.synchronized {
+          if (buffer.isEmpty) {
+            println("[consumer]buffer empty waiting...")
+            buffer.wait()
+          }
+          val x= buffer.dequeue()
+          println("[consumer] consumed value "+ x)
+          buffer.notify()
+        }
+        Thread.sleep(random.nextInt(500))
+      }
+    })
+    val producer = new Thread(() =>{
+      var i =0
+      val random = new Random()
+      while(true){
+        buffer.synchronized{
+          if(buffer.size == capacity) {
+            println("[producer] buffer full waiting...")
+            buffer.wait()
+          }
+          println("[producer] produced value "+i)
+          buffer.enqueue(i)
+
+          buffer.notify()
+          i += 1
+        }
+        Thread.sleep(random.nextInt(500))
+      }
+
+    })
+    consumer.start()
+    producer.start()
+  }
+  /*
+  Level 3 Multiple prod-cons with single buffer
+   */
+  class consumer(id: Int, buffer: mutable.Queue[Int]) extends Thread{
+    override def run(): Unit = {
+      val random = new Random()
+
+      while(true){
+        buffer.synchronized {
+          while (buffer.isEmpty) {
+            println(s"[consumer $id]buffer empty waiting...")
+            buffer.wait()
+          }
+          val x= buffer.dequeue()
+          println(s"[consumer $id] consumed value "+ x)
+          buffer.notify()
+        }
+        Thread.sleep(random.nextInt(500))
+      }
+    }
+  }
+  class producer(id: Int, buffer:mutable.Queue[Int],capacity: Int) extends Thread{
+    override def run(): Unit = {
+      var i =0
+      val random = new Random()
+      while(true){
+        buffer.synchronized{
+          while (buffer.size == capacity) {
+            println(s"[producer $id] buffer full waiting...")
+            buffer.wait()
+          }
+          println(s"[producer $id] produced value "+i)
+          buffer.enqueue(i)
+
+          buffer.notify()
+          i += 1
+        }
+        Thread.sleep(random.nextInt(500))
+      }
+
+    }
+  }
+  def multiprodcons(ncons: Int, nprod: Int)={
+    val buffer: mutable.Queue[Int] = new mutable.Queue[Int]
+    val capacity = 3
+    ( 1 to ncons).foreach(x =>new consumer(x,buffer).start())
+    (1 to nprod).foreach(x => new producer(x,buffer, capacity).start())
+  }
+   // Exercise
+  /*
+  1. NotifyAll is different than Notify
+  2. create a deadlock
+  3. create a livelock
+   */
+  def testnotify()={
+    val bell = new Object
+    (1 to 10).foreach(i => new Thread(() =>{
+      bell.synchronized{
+        println(s"bell ${i} waiting")
+        bell.wait()
+        println(s"bell ${i} rang")
+      }
+    }).start())
+    new Thread(() =>{
+      Thread.sleep(2000)
+      bell.synchronized{
+        println("Announcing")
+        bell.notify()
+      }
+    }).start()
+  }
+  //testnotify()
+  // 2. Deadlock Example
+  case class friend(name: String) {
+    def bow(other: friend) = {
+      this.synchronized {
+        println(s"$this: I am bowing to : $other")
+        other.rise(this)
+        println(s"$this: my friend $other has risen")
+      }
+    }
+
+    def rise(other: friend) = {
+      this.synchronized {
+        println(s"$this : I am rising to my friend $other")
+      }
+    }
+
+    var side = "right"
+
+    def switchside() = {
+      if (side == "right") side = "left"
+      else side = "right"
+    }
+
+    def pass(other: friend) = {
+      while (this.side == other.side) {
+        println(s"$this : oh..please go")
+        switchside()
+        Thread.sleep(1000)
+
+      }
+    }
+  }
+  val sam = friend("Sam")
+  val harry = friend("Harry")
+    new Thread(() => sam.pass(harry)).start()
+    new Thread(() => harry.pass(sam)).start()
+
+//  new Thread(() => sam.bow(harry)).start()
+//  new Thread(() => harry.bow(sam)).start()
+
+
+
+
+
+}
